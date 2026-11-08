@@ -20,7 +20,7 @@ check agent files; it can't view your agents, change them or act on the network.
 - **The network's checks.** `ekl agent check`: what the network would refuse or warn about in `agent.json`, and
   whether the services your agent plans to use still match their recorded stand-ins.
 - **The server's declarations**, when you give `mcp`: start your MCP server earlier in the job and pass its address.
-  `ekl agent sync --check` fails when `agent.json` differs from what your server declares.
+  `ekl agent sync --check --mcp <that address>` fails when `agent.json` differs from what your server declares.
 
 On a pull request from a fork, GitHub gives no secrets, so it runs the second check alone and says the network's
 checks were skipped.
