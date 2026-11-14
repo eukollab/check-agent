@@ -12,7 +12,7 @@ or confirms, and never writes `agent.json`. A new version of your agent reaches 
     EKL_TOKEN: ${{ secrets.EKL_TOKEN }}
 ```
 
-`EKL_TOKEN` is a CI token: create one in the console under Account → Organisation → Developer access. It can only
+`EKL_TOKEN` is a CI token: create one in the console under Account → Team → Developer access. It can only
 check agent files; it can't view your agents, change them or act on the network.
 
 ## What it checks
@@ -22,8 +22,11 @@ check agent files; it can't view your agents, change them or act on the network.
 - **The server's declarations**, when you give `mcp`: start your MCP server earlier in the job and pass its address.
   `ekl agent sync --check --mcp <that address>` fails when `agent.json` differs from what your server declares.
 
-On a pull request from a fork, GitHub gives no secrets, so it runs the second check alone and says the network's
-checks were skipped.
+On a pull request from a fork, GitHub gives no secrets. With `mcp` it then runs the second check alone; either way
+the job summary says the network's checks were skipped and the run carries a warning annotation. With neither
+`EKL_TOKEN` nor `mcp`, nothing is checked: the summary opens with **Nothing was checked** and the run is marked with a
+warning, so a skipped check never looks like a pass. The job itself still succeeds, so fork pull requests aren't
+blocked.
 
 ## Inputs
 
