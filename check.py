@@ -1,7 +1,8 @@
 # Copyright © 2026 EuKreate, Inc.
 # SPDX-License-Identifier: Apache-2.0
 """The Action's checks: the network's checks of agent.json with a CI token, and, given the server's
-address, whether agent.json still matches what the server declares. It writes nothing but its report."""
+address, whether agent.json still matches what the server and eukollab.json give. It writes nothing but its report. ekl runs in
+the agent's folder, and reads the server's address from EKL_UPSTREAM_MCP_URL, as agent.json names it."""
 
 import json
 import os
@@ -11,12 +12,13 @@ import sys
 from pathlib import Path
 
 
-def run(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["ekl", *args], capture_output=True, text=True, check=False)
+def run(*args: str, folder: Path | None = None, mcp: str = "") -> subprocess.CompletedProcess[str]:
+    env = {**os.environ, "EKL_UPSTREAM_MCP_URL": mcp} if mcp else None
+    return subprocess.run(["ekl", *args], capture_output=True, text=True, check=False, cwd=folder, env=env)
 
 
 def answered_problems(checked: subprocess.CompletedProcess[str]) -> list[dict[str, str]] | None:
-    """The problems `ekl --json agent check` reported, or None when the command failed or its answer isn't one."""
+    """The problems `ekl --json check` reported, or None when the command failed or its answer isn't one."""
     if checked.returncode != 0:
         return None
     try:
@@ -37,7 +39,13 @@ def diagnostics(done: subprocess.CompletedProcess[str]) -> str:
 
 def main() -> int:
     file, mcp, platform = os.environ["FILE"], os.environ.get("MCP", ""), os.environ["PLATFORM"]
+    # ekl checks the agent.json in the folder it runs in.
+    folder = Path(file).parent
     lines = [f"### EuKollab check of `{file}`", ""]
+    if Path(file).name != "agent.json":
+        lines.append(f"**Nothing was checked:** ekl checks a file named `agent.json`, not `{Path(file).name}`.")
+        print(f"::error title=EuKollab check-agent::{file} is not named agent.json.")
+        return report(lines, failed=True)
     failed = False
     if os.environ.get("EKL_TOKEN"):
         login = run("login", "--platform", platform)
@@ -45,7 +53,7 @@ def main() -> int:
             lines += ["**Could not sign in with `EKL_TOKEN`:**", "", f"```\n{login.stderr.strip()}\n```"]
             failed = True
         else:
-            checked = run("--json", "agent", "check", file)
+            checked = run("--json", "check", folder=folder, mcp=mcp)
             problems = answered_problems(checked)
             if problems is None:
                 # A failed command or an answer without its problems list is a failure, never a pass.
@@ -62,10 +70,10 @@ def main() -> int:
         # An annotation, so a skipped check never passes as quietly as a passing one.
         print("::warning title=EuKollab network checks skipped::No EKL_TOKEN: the network did not check agent.json.")
     if mcp:
-        synced = run("agent", "sync", file, "--mcp", mcp, "--check")
+        synced = run("sync", "--check", folder=folder, mcp=mcp)
         same = synced.returncode == 0
         failed |= not same
-        lines += ["", "**Against the server's declarations:** " + ("the same" if same else "different")]
+        lines += ["", "**Against your server and eukollab.json:** " + ("the same" if same else "different")]
         if not same:
             lines += ["", f"```\n{(synced.stdout + synced.stderr).strip()}\n```"]
     if not os.environ.get("EKL_TOKEN") and not mcp:
@@ -75,12 +83,17 @@ def main() -> int:
             "",
         ]
         print("::warning title=EuKollab check-agent checked nothing::Neither EKL_TOKEN nor mcp was given.")
-    report = "\n".join(lines) + "\n"
-    print(report)
+    return report(lines, failed=failed)
+
+
+def report(lines: list[str], *, failed: bool) -> int:
+    """The report to the log, the job summary and the pull request comment; the exit code."""
+    text = "\n".join(lines) + "\n"
+    print(text)
     for target in (os.environ.get("GITHUB_STEP_SUMMARY"), str(Path(os.environ["RUNNER_TEMP"]) / "eukollab-check.md")):
         if target:
             with Path(target).open("a") as out:
-                out.write(report)
+                out.write(text)
     shutil.rmtree(os.environ["EKL_CONFIG_DIR"], ignore_errors=True)  # the signed-in token goes with the job
     return 1 if failed else 0
 

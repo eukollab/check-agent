@@ -17,10 +17,12 @@ check agent files; it can't view your agents, change them or act on the network.
 
 ## What it checks
 
-- **The network's checks.** `ekl agent check`: what the network would refuse or warn about in `agent.json`, and
-  whether the services your agent plans to use still match their recorded stand-ins.
-- **The server's declarations**, when you give `mcp`: start your MCP server earlier in the job and pass its address.
-  `ekl agent sync --check --mcp <that address>` fails when `agent.json` differs from what your server declares.
+- **The network's checks.** `ekl check`, run in the folder of `file`: what the network would refuse or warn about in
+  `agent.json`, and whether the services your agent plans to use are still listed and match the schemas they were planned against. With `mcp`
+  set, it also tries each example in `agent.json` on your server.
+- **The file against your server**, when you give `mcp`: start your MCP server earlier in the job and pass its address.
+  `ekl sync --check`, run in the same folder with `EKL_UPSTREAM_MCP_URL` set to that address, fails when `agent.json`
+  differs from what your server and `eukollab.json` give.
 
 On a pull request from a fork, GitHub gives no secrets. With `mcp` it then runs the second check alone; either way
 the job summary says the network's checks were skipped and the run carries a warning annotation. With neither
@@ -32,13 +34,14 @@ blocked.
 
 | Input | Default | What it is |
 |---|---|---|
-| `file` | `agent.json` | The file to check |
+| `file` | `agent.json` | The `agent.json` to check, in the agent's folder |
 | `mcp` | none | Your MCP server's address, started earlier in the job |
 | `platform` | `https://eukollab.ai` | The EuKollab network |
 | `comment` | `false` | On a pull request, keep one comment with the results up to date (needs `pull-requests: write`) |
 
 The results are also in the job summary. In other CI systems, run the same commands: `ekl login` with `EKL_TOKEN` set,
-then `ekl --json agent check agent.json`.
+then, in the agent's folder, `ekl --json check` and `ekl sync --check`, with `EKL_UPSTREAM_MCP_URL` set to your
+running server for the examples and its tools.
 
 How to create the token and what each check reports: <https://eukollab.ai/docs/guide/check-in-ci>.
 
