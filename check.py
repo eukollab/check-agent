@@ -1,8 +1,8 @@
 # Copyright © 2026 EuKreate, Inc.
 # SPDX-License-Identifier: Apache-2.0
-"""The Action's checks: the network's checks of agent.json with a CI token, and, given the server's
-address, whether agent.json still matches what the server and eukollab.json give. It writes nothing but its report. ekl runs in
-the agent's folder, and reads the server's address from EKL_UPSTREAM_MCP_URL, as agent.json names it."""
+"""The Action's checks: the network's checks of agent.json with a CI token, and, given the server's address,
+whether agent.json still matches what the server and eukollab.json give. It writes nothing but its report. ekl runs
+in the agent's folder, and reads the server's address from EKL_UPSTREAM_MCP_URL, as agent.json names it."""
 
 import json
 import os
@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 
 def run(*args: str, folder: Path | None = None, mcp: str = "") -> subprocess.CompletedProcess[str]:
@@ -17,18 +18,29 @@ def run(*args: str, folder: Path | None = None, mcp: str = "") -> subprocess.Com
     return subprocess.run(["ekl", *args], capture_output=True, text=True, check=False, cwd=folder, env=env)
 
 
-def answered_problems(checked: subprocess.CompletedProcess[str]) -> list[dict[str, str]] | None:
-    """The problems `ekl --json check` reported, or None when the command failed or its answer isn't one."""
-    if checked.returncode != 0:
-        return None
+def answered(checked: subprocess.CompletedProcess[str]) -> dict[str, Any] | None:
+    """The answer `ekl --json check` gave, or None when it gave none. ekl exits 1 when the checks find errors, so the
+    exit code alone can't tell a check that found problems from one that could not run: only a missing answer can."""
     try:
         answer = json.loads(checked.stdout)
     except json.JSONDecodeError:
         return None
-    problems = answer.get("problems") if isinstance(answer, dict) else None
+    if not isinstance(answer, dict):
+        return None
+    problems = answer.get("problems")
     if not isinstance(problems, list) or not all(isinstance(p, dict) for p in problems):
         return None
-    return problems
+    return dict(answer)
+
+
+def planned_problems(answer: dict[str, Any]) -> list[str]:
+    """Each service agent.json plans to use that is no longer listed or changed since the plan was written."""
+    uses = answer.get("uses")
+    return [
+        f"- error: planned service `{u.get('service')}` ({u.get('need') or '-'}): {u['problem']}"
+        for u in (uses if isinstance(uses, list) else [])
+        if isinstance(u, dict) and u.get("problem")
+    ]
 
 
 def diagnostics(done: subprocess.CompletedProcess[str]) -> str:
@@ -54,16 +66,19 @@ def main() -> int:
             failed = True
         else:
             checked = run("--json", "check", folder=folder, mcp=mcp)
-            problems = answered_problems(checked)
-            if problems is None:
-                # A failed command or an answer without its problems list is a failure, never a pass.
+            answer = answered(checked)
+            if answer is None:
+                # No answer, or one without its problems list, is a failure, never a pass.
                 failed = True
                 lines += ["**The network's checks could not run:**", "", f"```\n{diagnostics(checked)}\n```"]
             else:
-                errors = [p for p in problems if p.get("level") == "error"]
-                failed |= bool(errors)
-                lines.append("**The network's checks:** " + ("problems found" if errors else "passed"))
+                problems, planned = answer["problems"], planned_problems(answer)
+                # ekl's own exit code also counts agent.json out of step with the server, which sync reports below.
+                found = bool([p for p in problems if p.get("level") == "error"] or planned or checked.returncode)
+                failed |= found
+                lines.append("**The network's checks:** " + ("problems found" if found else "passed"))
                 lines += [f"- {p.get('level')}: `{p.get('field') or '-'}` {p.get('message', '')}" for p in problems]
+                lines += planned
     else:
         # GitHub gives no secrets to a pull request from a fork.
         lines.append("**The network's checks were skipped:** no `EKL_TOKEN` (for example, a pull request from a fork).")
