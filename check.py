@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """The Action's checks: the network's checks of agent.json with a CI token, and, given the server's address,
 whether agent.json still matches what the server and eukollab.json give. It writes nothing but its report. ekl runs
-in the agent's folder, and reads the server's address from EKL_UPSTREAM_MCP_URL, as agent.json names it."""
+in the agent's folder, and reads the server's addresses from the EKL_UPSTREAM_* variables agent.json names: an MCP
+server's, an HTTPS API's OpenAPI document (and the API's own address when it is elsewhere) or an A2A agent's."""
 
 import json
 import os
@@ -12,9 +13,24 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# Each input and the variable ekl reads it from. api goes with openapi: alone it names no server.
+SERVERS = {
+    "MCP": "EKL_UPSTREAM_MCP_URL",
+    "OPENAPI": "EKL_UPSTREAM_OPENAPI_URL",
+    "API": "EKL_UPSTREAM_API_URL",
+    "A2A": "EKL_UPSTREAM_A2A_URL",
+}
 
-def run(*args: str, folder: Path | None = None, mcp: str = "") -> subprocess.CompletedProcess[str]:
-    env = {**os.environ, "EKL_UPSTREAM_MCP_URL": mcp} if mcp else None
+
+def servers() -> dict[str, str]:
+    """The EKL_UPSTREAM_* variables for the server addresses the workflow gave."""
+    return {variable: os.environ[name] for name, variable in SERVERS.items() if os.environ.get(name, "").strip()}
+
+
+def run(
+    *args: str, folder: Path | None = None, given: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
+    env = {**os.environ, **given} if given else None
     return subprocess.run(["ekl", *args], capture_output=True, text=True, check=False, cwd=folder, env=env)
 
 
@@ -50,7 +66,8 @@ def diagnostics(done: subprocess.CompletedProcess[str]) -> str:
 
 
 def main() -> int:
-    file, mcp, platform = os.environ["FILE"], os.environ.get("MCP", ""), os.environ["PLATFORM"]
+    file, platform, given = os.environ["FILE"], os.environ["PLATFORM"], servers()
+    server = bool({"EKL_UPSTREAM_MCP_URL", "EKL_UPSTREAM_OPENAPI_URL", "EKL_UPSTREAM_A2A_URL"} & given.keys())
     # ekl checks the agent.json in the folder it runs in.
     folder = Path(file).parent
     lines = [f"### EuKollab check of `{file}`", ""]
@@ -65,7 +82,7 @@ def main() -> int:
             lines += ["**Could not sign in with `EKL_TOKEN`:**", "", f"```\n{login.stderr.strip()}\n```"]
             failed = True
         else:
-            checked = run("--json", "check", folder=folder, mcp=mcp)
+            checked = run("--json", "check", folder=folder, given=given)
             answer = answered(checked)
             if answer is None:
                 # No answer, or one without its problems list, is a failure, never a pass.
@@ -84,20 +101,21 @@ def main() -> int:
         lines.append("**The network's checks were skipped:** no `EKL_TOKEN` (for example, a pull request from a fork).")
         # An annotation, so a skipped check never passes as quietly as a passing one.
         print("::warning title=EuKollab network checks skipped::No EKL_TOKEN: the network did not check agent.json.")
-    if mcp:
-        synced = run("sync", "--check", folder=folder, mcp=mcp)
+    if server:
+        synced = run("sync", "--check", folder=folder, given=given)
         same = synced.returncode == 0
         failed |= not same
         lines += ["", "**Against your server and eukollab.json:** " + ("the same" if same else "different")]
         if not same:
             lines += ["", f"```\n{(synced.stdout + synced.stderr).strip()}\n```"]
-    if not os.environ.get("EKL_TOKEN") and not mcp:
+    if not os.environ.get("EKL_TOKEN") and not server:
         # Neither check had what it needs: say so at the top, not as one line among results.
         lines[2:2] = [
-            "**Nothing was checked.** Set `EKL_TOKEN` for the network's checks, or `mcp` to compare with your server.",
+            "**Nothing was checked.** Set `EKL_TOKEN` for the network's checks, or your server's address (`mcp`, "
+            "`openapi` or `a2a`) to compare with it.",
             "",
         ]
-        print("::warning title=EuKollab check-agent checked nothing::Neither EKL_TOKEN nor mcp was given.")
+        print("::warning title=EuKollab check-agent checked nothing::Neither EKL_TOKEN nor a server address was given.")
     return report(lines, failed=failed)
 
 

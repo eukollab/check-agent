@@ -4,7 +4,7 @@
 # eukollab/check-agent: checks agent.json in a workflow and changes nothing. Each release pins the ekl wheel it
 # installs by its SHA-256 in the address, so pip refuses any other file.
 name: EuKollab check agent
-description: Check an EuKollab agent.json with the network's checks, and against what the MCP server and eukollab.json give.
+description: Check an EuKollab agent.json with the network's checks, and against what its server and eukollab.json give.
 author: EuKreate, Inc.
 branding:
   icon: check-circle
@@ -14,7 +14,16 @@ inputs:
     description: The agent.json to check; ekl runs in its folder.
     default: agent.json
   mcp:
-    description: The address of the agent's MCP server (an MCP server only), started earlier in the job, to compare agent.json with what the server and eukollab.json give. For an HTTPS API or an A2A agent, leave it empty and run `ekl sync --check` in a step of its own, with EKL_UPSTREAM_OPENAPI_URL or EKL_UPSTREAM_A2A_URL set.
+    description: The address of the agent's MCP server, started earlier in the job, to compare agent.json with what the server and eukollab.json give.
+    default: ""
+  openapi:
+    description: For an HTTPS API, the address of its OpenAPI document (JSON or YAML), with the API started earlier in the job.
+    default: ""
+  api:
+    description: The API's own address, when it isn't where its OpenAPI document says.
+    default: ""
+  a2a:
+    description: For an A2A agent, its address (where its agent card is), started earlier in the job.
     default: ""
   platform:
     description: The EuKollab network.
@@ -40,6 +49,9 @@ runs:
       env:
         FILE: ${{ inputs.file }}
         MCP: ${{ inputs.mcp }}
+        OPENAPI: ${{ inputs.openapi }}
+        API: ${{ inputs.api }}
+        A2A: ${{ inputs.a2a }}
         PLATFORM: ${{ inputs.platform }}
         EKL_CONFIG_DIR: ${{ runner.temp }}/ekl-config
       run: python3 "$GITHUB_ACTION_PATH/check.py"
