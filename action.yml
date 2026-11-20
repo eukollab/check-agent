@@ -14,7 +14,7 @@ inputs:
     description: The agent.json to check; ekl runs in its folder.
     default: agent.json
   mcp:
-    description: The address of the agent's MCP server, started earlier in the job, to compare agent.json with what the server and eukollab.json give.
+    description: The address of the agent's MCP server (an MCP server only), started earlier in the job, to compare agent.json with what the server and eukollab.json give. For an HTTPS API or an A2A agent, leave it empty and run `ekl sync --check` in a step of its own, with EKL_UPSTREAM_OPENAPI_URL or EKL_UPSTREAM_A2A_URL set.
     default: ""
   platform:
     description: The EuKollab network.
@@ -32,7 +32,7 @@ runs:
       run: |
         python3 -m venv "$RUNNER_TEMP/ekl"
         "$RUNNER_TEMP/ekl/bin/pip" install -q --no-deps \
-          "ekl-cli @ ${PLATFORM%/}/downloads/ekl_cli-0.11.4-py3-none-any.whl#sha256=9703db0a6272960cbb5da6f3844210c9df69376a9a93896b230e280b319772a8"
+          "ekl-cli @ ${PLATFORM%/}/downloads/ekl_cli-0.12.1-py3-none-any.whl#sha256=5d6b22df61d615199486c5364f44c5c4f8f8f39a735de5b22c91ff3371a67e0f"
         echo "$RUNNER_TEMP/ekl/bin" >> "$GITHUB_PATH"
     - name: Check
       id: check
