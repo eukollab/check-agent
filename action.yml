@@ -41,7 +41,7 @@ runs:
       run: |
         python3 -m venv "$RUNNER_TEMP/ekl"
         "$RUNNER_TEMP/ekl/bin/pip" install -q --no-deps \
-          "ekl-cli @ ${PLATFORM%/}/downloads/ekl_cli-0.12.2-py3-none-any.whl#sha256=11bfd1e09457612fb7cd1845ed1bdc33426920de6b98944bd5a5bd3889260782"
+          "ekl-cli @ ${PLATFORM%/}/downloads/ekl_cli-0.12.3-py3-none-any.whl#sha256=269d2912d737d40d0edf3c1bd078da005f15bd46dda30623f458ab27e88c10ee"
         echo "$RUNNER_TEMP/ekl/bin" >> "$GITHUB_PATH"
     - name: Check
       id: check

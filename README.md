@@ -58,7 +58,7 @@ examples and its tools.
 
 How to create the token and what each check reports: <https://eukollab.ai/docs/guide/check-in-ci>.
 
-## Licence
+## License
 
 Copyright © 2026 EuKreate, Inc. Licensed under the [Apache License 2.0](LICENSE); see [NOTICE](NOTICE).
 
